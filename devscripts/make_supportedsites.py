@@ -1,48 +1,30 @@
 #!/usr/bin/env python3
-from __future__ import unicode_literals
 
-import io
-import optparse
+# Allow direct execution
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import yt_dlp
-ROOT_DIR = os.path.join(os.path.dirname(__file__), '..')
-sys.path.insert(0, ROOT_DIR)
-import yt_dlp
+
+from devscripts.utils import get_filename_args, write_file
+from yt_dlp.extractor import list_extractor_classes
+
+TEMPLATE = '''\
+# Supported sites
+
+Below is a list of all extractors that are currently included with yt-dlp.
+If a site is not listed here, it might still be supported by yt-dlp's embed extraction or generic extractor.
+Not all sites listed here are guaranteed to work; websites are constantly changing and sometimes this breaks yt-dlp's support for them.
+The only reliable way to check if a site is supported is to try it.
+
+{ie_list}
+'''
 
 
 def main():
-    parser = optparse.OptionParser(usage='%prog OUTFILE.md')
-    options, args = parser.parse_args()
-    if len(args) != 1:
-        parser.error('Expected an output filename')
-
-    outfile, = args
-
-    def gen_ies_md(ies):
-        for ie in ies:
-            ie_md = '**{0}**'.format(ie.IE_NAME)
-            ie_desc = getattr(ie, 'IE_DESC', None)
-            if ie_desc is False:
-                continue
-            if ie_desc is not None:
-                ie_md += ': {0}'.format(ie.IE_DESC)
-            search_key = getattr(ie, 'SEARCH_KEY', None)
-            if search_key is not None:
-                ie_md += f'; "{ie.SEARCH_KEY}:" prefix'
-            if not ie.working():
-                ie_md += ' (Currently broken)'
-            yield ie_md
-
-    ies = sorted(yt_dlp.gen_extractors(), key=lambda i: i.IE_NAME.lower())
-    out = '# Supported sites\n' + ''.join(
-        ' - ' + md + '\n'
-        for md in gen_ies_md(ies))
-
-    with io.open(outfile, 'w', encoding='utf-8') as outf:
-        outf.write(out)
+    out = '\n'.join(ie.description() for ie in list_extractor_classes() if ie.IE_DESC is not False)
+    write_file(get_filename_args(), TEMPLATE.format(ie_list=out))
 
 
 if __name__ == '__main__':

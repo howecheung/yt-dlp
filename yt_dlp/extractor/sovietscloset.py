@@ -1,11 +1,6 @@
-# coding: utf-8
-from __future__ import unicode_literals
-
+from .bunnycdn import BunnyCdnIE
 from .common import InfoExtractor
-from ..utils import (
-    try_get,
-    unified_timestamp
-)
+from ..utils import make_archive_id, try_get, unified_timestamp
 
 
 class SovietsClosetBaseIE(InfoExtractor):
@@ -47,9 +42,9 @@ class SovietsClosetIE(SovietsClosetBaseIE):
     _TESTS = [
         {
             'url': 'https://sovietscloset.com/video/1337',
-            'md5': '11e58781c4ca5b283307aa54db5b3f93',
+            'md5': 'bd012b04b261725510ca5383074cdd55',
             'info_dict': {
-                'id': '1337',
+                'id': '2f0cfbf4-3588-43a9-a7d6-7c9ea3755e67',
                 'ext': 'mp4',
                 'title': 'The Witcher #13',
                 'thumbnail': r're:^https?://.*\.b-cdn\.net/2f0cfbf4-3588-43a9-a7d6-7c9ea3755e67/thumbnail\.jpg$',
@@ -61,24 +56,27 @@ class SovietsClosetIE(SovietsClosetBaseIE):
                 'upload_date': '20170413',
                 'uploader_id': 'SovietWomble',
                 'uploader_url': 'https://www.twitch.tv/SovietWomble',
-                'duration': 7007,
+                'duration': 7008,
                 'was_live': True,
                 'availability': 'public',
                 'series': 'The Witcher',
                 'season': 'Misc',
                 'episode_number': 13,
+                'episode': 'Episode 13',
+                'creators': ['SovietWomble'],
+                'description': '',
+                '_old_archive_ids': ['sovietscloset 1337'],
             },
         },
         {
             'url': 'https://sovietscloset.com/video/1105',
-            'md5': '578b1958a379e7110ba38697042e9efb',
+            'md5': '89fa928f183893cb65a0b7be846d8a90',
             'info_dict': {
-                'id': '1105',
+                'id': 'c0e5e76f-3a93-40b4-bf01-12343c2eec5d',
                 'ext': 'mp4',
-                'title': 'Arma 3 - Zeus Games #3',
+                'title': 'Arma 3 - Zeus Games #5',
                 'uploader': 'SovietWomble',
                 'thumbnail': r're:^https?://.*\.b-cdn\.net/c0e5e76f-3a93-40b4-bf01-12343c2eec5d/thumbnail\.jpg$',
-                'uploader': 'SovietWomble',
                 'creator': 'SovietWomble',
                 'release_timestamp': 1461157200,
                 'release_date': '20160420',
@@ -86,55 +84,36 @@ class SovietsClosetIE(SovietsClosetBaseIE):
                 'upload_date': '20160420',
                 'uploader_id': 'SovietWomble',
                 'uploader_url': 'https://www.twitch.tv/SovietWomble',
-                'duration': 8804,
+                'duration': 8805,
                 'was_live': True,
                 'availability': 'public',
                 'series': 'Arma 3',
                 'season': 'Zeus Games',
-                'episode_number': 3,
+                'episode_number': 5,
+                'episode': 'Episode 5',
+                'creators': ['SovietWomble'],
+                'description': '',
+                '_old_archive_ids': ['sovietscloset 1105'],
             },
         },
     ]
-
-    def _extract_bunnycdn_iframe(self, video_id, bunnycdn_id):
-        iframe = self._download_webpage(
-            f'https://iframe.mediadelivery.net/embed/5105/{bunnycdn_id}',
-            video_id, note='Downloading BunnyCDN iframe', headers=self.MEDIADELIVERY_REFERER)
-
-        m3u8_url = self._search_regex(r'(https?://.*?\.m3u8)', iframe, 'm3u8 url')
-        thumbnail_url = self._search_regex(r'(https?://.*?thumbnail\.jpg)', iframe, 'thumbnail url')
-
-        m3u8_formats = self._extract_m3u8_formats(m3u8_url, video_id, headers=self.MEDIADELIVERY_REFERER)
-        self._sort_formats(m3u8_formats)
-
-        if not m3u8_formats:
-            duration = None
-        else:
-            duration = self._extract_m3u8_vod_duration(
-                m3u8_formats[0]['url'], video_id, headers=self.MEDIADELIVERY_REFERER)
-
-        return {
-            'formats': m3u8_formats,
-            'thumbnail': thumbnail_url,
-            'duration': duration,
-        }
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
         webpage = self._download_webpage(url, video_id)
 
-        static_assets_base = self._search_regex(r'staticAssetsBase:\"(.*?)\"', webpage, 'staticAssetsBase')
+        static_assets_base = self._search_regex(r'(/_nuxt/static/\d+)', webpage, 'staticAssetsBase')
         static_assets_base = f'https://sovietscloset.com{static_assets_base}'
 
         stream = self.parse_nuxt_jsonp(f'{static_assets_base}/video/{video_id}/payload.js', video_id, 'video')['stream']
 
-        return {
+        return self.url_result(
+            f'https://iframe.mediadelivery.net/embed/5105/{stream["bunnyId"]}', ie=BunnyCdnIE, url_transparent=True,
             **self.video_meta(
                 video_id=video_id, game_name=stream['game']['name'],
                 category_name=try_get(stream, lambda x: x['subcategory']['name'], str),
                 episode_number=stream.get('number'), stream_date=stream.get('date')),
-            **self._extract_bunnycdn_iframe(video_id, stream['bunnyId']),
-        }
+            _old_archive_ids=[make_archive_id(self, video_id)])
 
 
 class SovietsClosetPlaylistIE(SovietsClosetBaseIE):
@@ -182,7 +161,7 @@ class SovietsClosetPlaylistIE(SovietsClosetBaseIE):
 
         webpage = self._download_webpage(url, playlist_id)
 
-        static_assets_base = self._search_regex(r'staticAssetsBase:\"(.*?)\"', webpage, 'staticAssetsBase')
+        static_assets_base = self._search_regex(r'(/_nuxt/static/\d+)', webpage, 'staticAssetsBase')
         static_assets_base = f'https://sovietscloset.com{static_assets_base}'
 
         sovietscloset = self.parse_nuxt_jsonp(f'{static_assets_base}/payload.js', playlist_id, 'global')['games']
